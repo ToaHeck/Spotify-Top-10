@@ -4,6 +4,14 @@ const scopes = 'user-read-currently-playing user-read-recently-played user-top-r
 
 let trackArray = [];
 
+// Generate a random string (verifier) for PKCE
+function generateRandomString(length) {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
+}
+
+// Generate a code challenge from the verifier
 async function generateCodeChallenge(verifier) {
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
@@ -14,22 +22,19 @@ async function generateCodeChallenge(verifier) {
         .replace(/=+$/, '');
 }
 
-function generateRandomString(length) {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
-}
-
+// Authorize the user and start the authorization process
 async function authorize() {
-    const verifier = generateRandomString(64);
-    const challenge = await generateCodeChallenge(verifier);
-    sessionStorage.setItem('verifier', verifier);  // Store verifier in sessionStorage
+    const verifier = generateRandomString(64); // Generate a random verifier
+    const challenge = await generateCodeChallenge(verifier); // Generate the code challenge based on verifier
+    sessionStorage.setItem('verifier', verifier); // Store verifier in sessionStorage
+    
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge_method=S256&code_challenge=${challenge}&scope=${encodeURIComponent(scopes)}`;
-    window.location = authUrl;
+    window.location = authUrl; // Redirect user to Spotify for login
 }
 
+// Exchange the authorization code for an access token
 async function getAccessToken(code) {
-    const verifier = sessionStorage.getItem('verifier');  // Retrieve the stored verifier
+    const verifier = sessionStorage.getItem('verifier'); // Retrieve verifier from sessionStorage
 
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -39,7 +44,7 @@ async function getAccessToken(code) {
             code,
             redirect_uri: redirectUri,
             client_id: clientId,
-            code_verifier: verifier
+            code_verifier: verifier // Use the verifier to get the access token
         })
     });
 
@@ -47,6 +52,7 @@ async function getAccessToken(code) {
     return data;
 }
 
+// Fetch the user's top tracks
 async function fetchTopTracks(token) {
     const response = await fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', {
         headers: { 
@@ -58,6 +64,7 @@ async function fetchTopTracks(token) {
     return response.json();
 }
 
+// Display the top tracks
 function displayTracks(tracks) {
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '<h3 class="text-light">Your Top Tracks (Last 4 Weeks)</h3>';
@@ -72,22 +79,24 @@ function displayTracks(tracks) {
     });
 }
 
+// Handle the callback from Spotify and exchange the code for an access token
 async function handleCallback() {
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+    const code = urlParams.get('code'); // Get the code parameter from the URL
     if (code) {
         try {
-            const data = await getAccessToken(code);
-            sessionStorage.setItem('access_token', data.access_token);  // Store access token in sessionStorage
-            const tracksData = await fetchTopTracks(data.access_token);
-            displayTracks(tracksData.items);
-            window.history.replaceState({}, document.title, '/');
+            const data = await getAccessToken(code); // Exchange code for access token
+            sessionStorage.setItem('access_token', data.access_token); // Store the access token in sessionStorage
+            const tracksData = await fetchTopTracks(data.access_token); // Fetch top tracks using access token
+            displayTracks(tracksData.items); // Display the tracks
+            window.history.replaceState({}, document.title, '/'); // Clean up URL (remove the code parameter)
         } catch (error) {
             console.error('Error during authentication:', error);
         }
     } else {
-        authorize();  // Start the authorization process if no code is found
+        authorize(); // If no code parameter, start the authorization process
     }
 }
 
+// Start the callback handling after the page loads
 document.addEventListener('DOMContentLoaded', handleCallback);
