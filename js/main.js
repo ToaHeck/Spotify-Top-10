@@ -1,8 +1,3 @@
-import 'bootstrap';
-import 'dotenv/config';
-
-
-
 var trackArray = [];
 
 
@@ -108,7 +103,7 @@ async function handleCallback() {
             displayTracks(tracksData.items);
             
             //clear the URL after processing the authorization code
-            window.history.replaceState({}, document.title, '/');
+            window.history.replaceState({}, document.title, window.location.pathname);
         } catch (error) {
             console.error('Error during authentication:', error);
         }
