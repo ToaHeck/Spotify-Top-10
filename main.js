@@ -23,14 +23,13 @@ function generateRandomString(length) {
 async function authorize() {
     const verifier = generateRandomString(64);
     const challenge = await generateCodeChallenge(verifier);
-    localStorage.setItem('verifier', verifier);
+    sessionStorage.setItem('verifier', verifier);  // Store verifier in sessionStorage
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge_method=S256&code_challenge=${challenge}&scope=${encodeURIComponent(scopes)}`;
     window.location = authUrl;
 }
 
 async function getAccessToken(code) {
-    sessionStorage.setItem('verifier', verifier);
-    const verifier = sessionStorage.getItem('verifier');
+    const verifier = sessionStorage.getItem('verifier');  // Retrieve the stored verifier
 
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -79,7 +78,7 @@ async function handleCallback() {
     if (code) {
         try {
             const data = await getAccessToken(code);
-            localStorage.setItem('access_token', data.access_token);
+            sessionStorage.setItem('access_token', data.access_token);  // Store access token in sessionStorage
             const tracksData = await fetchTopTracks(data.access_token);
             displayTracks(tracksData.items);
             window.history.replaceState({}, document.title, '/');
@@ -87,7 +86,7 @@ async function handleCallback() {
             console.error('Error during authentication:', error);
         }
     } else {
-        authorize();
+        authorize();  // Start the authorization process if no code is found
     }
 }
 
