@@ -29,7 +29,9 @@ async function authorize() {
 }
 
 async function getAccessToken(code) {
-    const verifier = localStorage.getItem('verifier');
+    sessionStorage.setItem('verifier', verifier);
+    const verifier = sessionStorage.getItem('verifier');
+
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -48,7 +50,11 @@ async function getAccessToken(code) {
 
 async function fetchTopTracks(token) {
     const response = await fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+            'Authorization': `Bearer ${token}`, 
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          }          
     });
     return response.json();
 }
