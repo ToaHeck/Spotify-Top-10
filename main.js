@@ -4,14 +4,6 @@ const scopes = 'user-read-currently-playing user-read-recently-played user-top-r
 
 let trackArray = [];
 
-// Generate a random string (verifier) for PKCE
-function generateRandomString(length) {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
-}
-
-// Generate a code challenge from the verifier
 async function generateCodeChallenge(verifier) {
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
@@ -22,81 +14,77 @@ async function generateCodeChallenge(verifier) {
         .replace(/=+$/, '');
 }
 
-// Authorize the user and start the authorization process
-async function authorize() {
-    const verifier = generateRandomString(64); // Generate a random verifier
-    const challenge = await generateCodeChallenge(verifier); // Generate the code challenge based on verifier
-    sessionStorage.setItem('verifier', verifier); // Store verifier in sessionStorage
-    
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge_method=S256&code_challenge=${challenge}&scope=${encodeURIComponent(scopes)}`;
-    window.location = authUrl; // Redirect user to Spotify for login
+function generateRandomString(length) {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
 }
 
-// Exchange the authorization code for an access token
-async function getAccessToken(code) {
-    const verifier = sessionStorage.getItem('verifier'); // Retrieve verifier from sessionStorage
+async function authorize() {
+    const verifier = generateRandomString(64);
+    const challenge = await generateCodeChallenge(verifier);
+    sessionStorage.setItem('verifier', verifier);
 
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge_method=S256&code_challenge=${challenge}&scope=${encodeURIComponent(scopes)}`;
+    window.location = authUrl;
+}
+
+async function getAccessToken(code) {
+    const verifier = sessionStorage.getItem('verifier');
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
+            client_id: clientId,
             grant_type: 'authorization_code',
             code,
             redirect_uri: redirectUri,
-            client_id: clientId,
-            code_verifier: verifier // Use the verifier to get the access token
-        })
+            code_verifier: verifier,
+        }),
     });
 
-    const data = await response.json();
-    return data;
+    return await response.json();
 }
 
-// Fetch the user's top tracks
 async function fetchTopTracks(token) {
-    const response = await fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', {
-        headers: { 
-            'Authorization': `Bearer ${token}`, 
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          }          
+    const response = await fetch('https://api.spotify.com/v1/me/top/tracks?limit=10', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
     });
-    return response.json();
+
+    return await response.json();
 }
 
-// Display the top tracks
 function displayTracks(tracks) {
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = '<h3 class="text-light">Your Top Tracks (Last 4 Weeks)</h3>';
-
+    const results = document.getElementById('results');
+    results.innerHTML = '<h3>Your Top Tracks:</h3>';
     tracks.forEach((track, index) => {
         const item = document.createElement('div');
-        item.className = 'list-group';
-        item.innerHTML = `
-            <a href="${track.external_urls.spotify}" target="_blank" class="list-group-item list-group-item-action">${index + 1}. <b>${track.name}</b> by ${track.artists.map(a => a.name).join(', ')}</a>`;
-        resultsDiv.appendChild(item);
-        trackArray.push(track.name + " by " + track.artists.map(a => a.name).join(', '));
+        item.innerHTML = `${index + 1}. ${track.name} by ${track.artists[0].name}`;
+        results.appendChild(item);
     });
 }
 
-// Handle the callback from Spotify and exchange the code for an access token
 async function handleCallback() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code'); // Get the code parameter from the URL
+    const code = new URLSearchParams(window.location.search).get('code');
     if (code) {
-        try {
-            const data = await getAccessToken(code); // Exchange code for access token
-            sessionStorage.setItem('access_token', data.access_token); // Store the access token in sessionStorage
-            const tracksData = await fetchTopTracks(data.access_token); // Fetch top tracks using access token
-            displayTracks(tracksData.items); // Display the tracks
-            window.history.replaceState({}, document.title, '/'); // Clean up URL (remove the code parameter)
-        } catch (error) {
-            console.error('Error during authentication:', error);
+        const data = await getAccessToken(code);
+        if (data.access_token) {
+            const tracks = await fetchTopTracks(data.access_token);
+            displayTracks(tracks.items);
+        } else {
+            console.error('Failed to get access token:', data);
         }
     } else {
-        authorize(); // If no code parameter, start the authorization process
+        authorize();
     }
 }
 
-// Start the callback handling after the page loads
-document.addEventListener('DOMContentLoaded', handleCallback);
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname.includes('callback')) {
+        handleCallback();
+    } else {
+        document.getElementById('authorize').addEventListener('click', authorize);
+    }
+});
